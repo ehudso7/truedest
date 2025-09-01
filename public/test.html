@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>JavaScript Test Page</h1>
+    <button onclick="alert('JavaScript is working!')">Test JavaScript</button>
+    <button onclick="window.location.href='/'">Go to Homepage</button>
+    
+    <script>
+        console.log('JavaScript loaded');
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="TravelBudi - Your AI-Powered Travel Companion">
+    <title>TravelBudi - Real-Time Travel Booking Platform</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <svg class="logo" viewBox="0 0 40 40" fill="none">
+                        <path d="M20 4L34 12V28L20 36L6 28V12L20 4Z" stroke="currentColor" stroke-width="2"/>
+                        <circle cx="20" cy="20" r="4" fill="currentColor"/>
+                    </svg>
+                    <span class="brand-name">TravelBudi</span>
+                </div>
+                <div class="nav-menu">
+                    <a href="#" onclick="showSection('home')" class="nav-link">Home</a>
+                    <a href="#" onclick="showSection('flights')" class="nav-link">Flights</a>
+                    <a href="#" onclick="showSection('hotels')" class="nav-link">Hotels</a>
+                    <a href="#" onclick="showSection('bookings')" class="nav-link">My Bookings</a>
+                </div>
+                <div class="nav-actions">
+                    <button id="loginBtn" class="btn btn-primary" onclick="showLoginModal()">Login</button>
+                    <div id="userMenu" class="user-menu hidden">
+                        <img id="userAvatar" class="avatar" alt="User">
+                        <span id="userName"></span>
+                        <button onclick="logout()" class="btn btn-secondary">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main id="mainContent">
+            <!-- Home Section -->
+            <section id="homeSection" class="section active">
+                <div class="hero">
+                    <div class="hero-content">
+                        <h1 class="hero-title">Book Your Next Adventure</h1>
+                        <p class="hero-subtitle">Find the best flights and hotels with real-time pricing</p>
+                        
+                        <!-- Search Form -->
+                        <div class="search-container">
+                            <div class="search-tabs">
+                                <button class="search-tab active" onclick="setSearchType('flight')">Flights</button>
+                                <button class="search-tab" onclick="setSearchType('hotel')">Hotels</button>
+                            </div>
+                            
+                            <form id="searchForm" class="search-form">
+                                <div class="search-inputs">
+                                    <input type="text" id="fromInput" placeholder="From City" required>
+                                    <input type="text" id="toInput" placeholder="To City" required>
+                                    <input type="date" id="departDate" required>
+                                    <input type="date" id="returnDate">
+                                    <select id="passengers">
+                                        <option value="1">1 Passenger</option>
+                                        <option value="2">2 Passengers</option>
+                                        <option value="3">3 Passengers</option>
+                                        <option value="4">4+ Passengers</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Search Flights</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trending Destinations -->
+                <div class="container">
+                    <h2 class="section-title">Trending Destinations</h2>
+                    <div id="destinationsGrid" class="destinations-grid">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Flights Section -->
+            <section id="flightsSection" class="section">
+                <div class="container">
+                    <h2 class="section-title">Available Flights</h2>
+                    <div id="flightResults" class="results-grid">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Hotels Section -->
+            <section id="hotelsSection" class="section">
+                <div class="container">
+                    <h2 class="section-title">Available Hotels</h2>
+                    <div id="hotelResults" class="results-grid">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bookings Section -->
+            <section id="bookingsSection" class="section">
+                <div class="container">
+                    <h2 class="section-title">My Bookings</h2>
+                    <div id="bookingsList" class="bookings-list">
+                        <p>Please login to view your bookings</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Login Modal -->
+        <div id="loginModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Login</h3>
+                    <button class="modal-close" onclick="closeLoginModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="authForm">
+                        <div class="form-group">
+                            <label for="emailInput">Email</label>
+                            <input type="email" id="emailInput" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="passwordInput">Password</label>
+                            <input type="password" id="passwordInput" required>
+                        </div>
+                        <div id="nameGroup" class="form-group hidden">
+                            <label for="nameInput">Full Name</label>
+                            <input type="text" id="nameInput">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Login</button>
+                        <p class="form-footer">
+                            <span id="authToggleText">Don't have an account?</span>
+                            <a href="#" onclick="toggleAuthMode()" id="authToggleLink">Sign up</a>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Chat -->
+        <button id="aiChatBtn" class="ai-chat-btn" onclick="toggleAIChat()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+        </button>
+
+        <div id="aiChatWindow" class="ai-chat-window">
+            <div class="chat-header">
+                <h4>AI Travel Assistant</h4>
+                <button onclick="toggleAIChat()">&times;</button>
+            </div>
+            <div id="chatMessages" class="chat-messages">
+                <div class="chat-message bot">
+                    <div class="message-content">Hello! I can help you find flights, hotels, and plan your trip. What are you looking for?</div>
+                </div>
+            </div>
+            <form id="chatForm" class="chat-input">
+                <input type="text" id="chatInput" placeholder="Ask me anything...">
+                <button type="submit">Send</button>
+            </form>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toastContainer" class="toast-container"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

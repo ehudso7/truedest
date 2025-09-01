@@ -1,0 +1,637 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  emailVerified     DateTime?
+  name              String?
+  password          String?
+  image             String?
+  phone             String?
+  dateOfBirth       DateTime?
+  nationality       String?
+  passportNumber    String?
+  passportExpiry    DateTime?
+  preferredCurrency String    @default("USD")
+  preferredLanguage String    @default("en")
+  role              UserRole  @default(USER)
+  status            UserStatus @default(ACTIVE)
+  twoFactorEnabled  Boolean   @default(false)
+  twoFactorSecret   String?
+  
+  // Loyalty Program
+  loyaltyPoints     Int       @default(0)
+  loyaltyTier       LoyaltyTier @default(BRONZE)
+  memberSince       DateTime  @default(now())
+  
+  // Preferences
+  preferences       Json?
+  notificationPrefs Json?
+  
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  bookings          Booking[]
+  reviews           Review[]
+  wishlist          Wishlist[]
+  searches          SearchHistory[]
+  payments          Payment[]
+  notifications     Notification[]
+  supportTickets    SupportTicket[]
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([email])
+  @@index([loyaltyTier])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// Booking System
+model Booking {
+  id                String        @id @default(cuid())
+  bookingReference  String        @unique
+  userId            String
+  user              User          @relation(fields: [userId], references: [id])
+  
+  type              BookingType
+  status            BookingStatus @default(PENDING)
+  
+  // Pricing
+  totalAmount       Float
+  currency          String
+  taxAmount         Float?
+  discountAmount    Float?
+  loyaltyPointsUsed Int           @default(0)
+  loyaltyPointsEarned Int         @default(0)
+  
+  // Payment
+  paymentStatus     PaymentStatus @default(PENDING)
+  paymentMethod     String?
+  
+  // Travel Details
+  travelDate        DateTime
+  returnDate        DateTime?
+  adults            Int           @default(1)
+  children          Int           @default(0)
+  infants           Int           @default(0)
+  
+  // Relations
+  flights           FlightBooking[]
+  hotels            HotelBooking[]
+  carRentals        CarRental[]
+  activities        ActivityBooking[]
+  payments          Payment[]
+  
+  // Meta
+  specialRequests   String?
+  internalNotes     String?
+  cancellationReason String?
+  cancelledAt       DateTime?
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+  @@index([travelDate])
+}
+
+model FlightBooking {
+  id               String   @id @default(cuid())
+  bookingId        String
+  booking          Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  
+  // Flight Details
+  flightNumber     String
+  airline          String
+  aircraftType     String?
+  
+  // Route
+  departureAirport String
+  departureCity    String
+  departureCountry String
+  arrivalAirport   String
+  arrivalCity      String
+  arrivalCountry   String
+  
+  // Schedule
+  departureTime    DateTime
+  arrivalTime      DateTime
+  duration         Int      // in minutes
+  
+  // Booking Details
+  bookingClass     String
+  seatNumbers      String[]
+  baggage          Json?
+  meals            Json?
+  
+  // Pricing
+  basePrice        Float
+  taxes            Float
+  total            Float
+  
+  // Status
+  status           FlightStatus @default(CONFIRMED)
+  pnr              String?
+  ticketNumber     String?
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  @@index([bookingId])
+  @@index([departureTime])
+}
+
+model HotelBooking {
+  id              String   @id @default(cuid())
+  bookingId       String
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  
+  // Hotel Details
+  hotelId         String
+  hotelName       String
+  hotelAddress    String
+  hotelCity       String
+  hotelCountry    String
+  starRating      Int?
+  
+  // Room Details
+  roomType        String
+  roomCount       Int      @default(1)
+  bedType         String?
+  view            String?
+  
+  // Stay Details
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  nights          Int
+  
+  // Guest Details
+  guestName       String
+  specialRequests String?
+  
+  // Pricing
+  roomRate        Float
+  taxes           Float
+  total           Float
+  
+  // Meal Plan
+  mealPlan        String?  // BB, HB, FB, AI
+  
+  // Status
+  status          HotelStatus @default(CONFIRMED)
+  confirmationNumber String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([bookingId])
+  @@index([checkInDate])
+}
+
+model CarRental {
+  id              String   @id @default(cuid())
+  bookingId       String
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  
+  // Vehicle Details
+  vehicleCategory String
+  vehicleModel    String?
+  transmission    String   // Manual, Automatic
+  fuelType        String
+  
+  // Rental Details
+  pickupLocation  String
+  pickupDateTime  DateTime
+  dropoffLocation String
+  dropoffDateTime DateTime
+  
+  // Driver Details
+  driverName      String
+  driverLicense   String
+  driverAge       Int
+  
+  // Pricing
+  dailyRate       Float
+  totalDays       Int
+  insurance       Float?
+  extras          Json?    // GPS, child seat, etc.
+  total           Float
+  
+  // Status
+  status          CarRentalStatus @default(CONFIRMED)
+  confirmationNumber String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([bookingId])
+  @@index([pickupDateTime])
+}
+
+model ActivityBooking {
+  id              String   @id @default(cuid())
+  bookingId       String
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  
+  // Activity Details
+  activityName    String
+  activityType    String
+  provider        String
+  location        String
+  
+  // Schedule
+  activityDate    DateTime
+  startTime       String?
+  duration        Int?     // in minutes
+  
+  // Participants
+  adults          Int      @default(1)
+  children        Int      @default(0)
+  
+  // Pricing
+  adultPrice      Float
+  childPrice      Float?
+  total           Float
+  
+  // Status
+  status          ActivityStatus @default(CONFIRMED)
+  confirmationNumber String?
+  voucherUrl      String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([bookingId])
+  @@index([activityDate])
+}
+
+// Payment System
+model Payment {
+  id              String        @id @default(cuid())
+  bookingId       String
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  
+  amount          Float
+  currency        String
+  method          PaymentMethod
+  status          PaymentStatus
+  
+  // Payment Gateway Details
+  gatewayProvider String?       // Stripe, PayPal, etc.
+  transactionId   String?       @unique
+  gatewayResponse Json?
+  
+  // Card Details (encrypted)
+  cardLast4       String?
+  cardBrand       String?
+  
+  // Refund Details
+  refundAmount    Float?
+  refundReason    String?
+  refundedAt      DateTime?
+  
+  metadata        Json?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([bookingId])
+  @@index([userId])
+  @@index([status])
+}
+
+// Reviews & Ratings
+model Review {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  entityType      ReviewEntityType
+  entityId        String
+  
+  rating          Int      // 1-5
+  title           String?
+  comment         String
+  
+  // Detailed Ratings
+  cleanliness     Int?
+  comfort         Int?
+  location        Int?
+  facilities      Int?
+  staff           Int?
+  valueForMoney   Int?
+  
+  // Review Meta
+  helpful         Int      @default(0)
+  notHelpful      Int      @default(0)
+  verified        Boolean  @default(false)
+  
+  images          String[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([rating])
+}
+
+// Wishlist
+model Wishlist {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  entityType      WishlistEntityType
+  entityId        String
+  
+  title           String
+  description     String?
+  imageUrl        String?
+  price           Float?
+  currency        String?
+  
+  metadata        Json?
+  
+  createdAt       DateTime @default(now())
+  
+  @@unique([userId, entityType, entityId])
+  @@index([userId])
+}
+
+// Search History
+model SearchHistory {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  sessionId       String?
+  
+  searchType      SearchType
+  query           Json
+  resultsCount    Int?
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([userId])
+  @@index([searchType])
+  @@index([createdAt])
+}
+
+// Notifications
+model Notification {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  type            NotificationType
+  title           String
+  message         String
+  
+  read            Boolean  @default(false)
+  readAt          DateTime?
+  
+  actionUrl       String?
+  metadata        Json?
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([userId, read])
+  @@index([type])
+}
+
+// Support System
+model SupportTicket {
+  id              String   @id @default(cuid())
+  ticketNumber    String   @unique
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  category        TicketCategory
+  priority        TicketPriority
+  status          TicketStatus @default(OPEN)
+  
+  subject         String
+  description     String
+  
+  assignedTo      String?
+  resolvedAt      DateTime?
+  resolution      String?
+  
+  messages        TicketMessage[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+}
+
+model TicketMessage {
+  id              String        @id @default(cuid())
+  ticketId        String
+  ticket          SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  senderId        String
+  senderType      SenderType
+  message         String
+  attachments     String[]
+  
+  createdAt       DateTime      @default(now())
+  
+  @@index([ticketId])
+}
+
+// Enums
+enum UserRole {
+  USER
+  ADMIN
+  SUPPORT
+  PARTNER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum LoyaltyTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum BookingType {
+  FLIGHT
+  HOTEL
+  PACKAGE
+  CAR
+  ACTIVITY
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  PAYPAL
+  APPLE_PAY
+  GOOGLE_PAY
+  BANK_TRANSFER
+  CRYPTO
+}
+
+enum FlightStatus {
+  CONFIRMED
+  PENDING
+  CANCELLED
+  COMPLETED
+}
+
+enum HotelStatus {
+  CONFIRMED
+  PENDING
+  CANCELLED
+  CHECKED_IN
+  CHECKED_OUT
+  NO_SHOW
+}
+
+enum CarRentalStatus {
+  CONFIRMED
+  PENDING
+  CANCELLED
+  PICKED_UP
+  RETURNED
+}
+
+enum ActivityStatus {
+  CONFIRMED
+  PENDING
+  CANCELLED
+  COMPLETED
+}
+
+enum ReviewEntityType {
+  FLIGHT
+  HOTEL
+  CAR
+  ACTIVITY
+  DESTINATION
+}
+
+enum WishlistEntityType {
+  FLIGHT
+  HOTEL
+  PACKAGE
+  DESTINATION
+  ACTIVITY
+}
+
+enum SearchType {
+  FLIGHT
+  HOTEL
+  PACKAGE
+  CAR
+  ACTIVITY
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  PRICE_DROP
+  REMINDER
+  PROMOTION
+  SYSTEM
+}
+
+enum TicketCategory {
+  BOOKING
+  PAYMENT
+  CANCELLATION
+  TECHNICAL
+  GENERAL
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum SenderType {
+  USER
+  SUPPORT
+  SYSTEM
+}
