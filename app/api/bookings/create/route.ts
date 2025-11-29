@@ -1,49 +1,111 @@
+/**
+ * Booking Creation API Route
+ *
+ * Creates a new booking with flight or hotel details.
+ * Integrates with Amadeus for GDS booking and Stripe for payments.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth/config'
 import { prisma } from '@/lib/prisma'
 import { amadeusService } from '@/lib/services/amadeus'
 import { stripeService } from '@/lib/services/stripe'
 import { pusherService } from '@/lib/services/pusher'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/config'
+import { z } from 'zod'
+
+// Booking request validation schema
+const bookingRequestSchema = z.object({
+  type: z.enum(['FLIGHT', 'HOTEL']),
+  flightOffer: z.record(z.unknown()).optional(),
+  hotelOffer: z.record(z.unknown()).optional(),
+  travelers: z.array(z.object({
+    id: z.string(),
+    dateOfBirth: z.string(),
+    name: z.object({
+      firstName: z.string().min(1),
+      lastName: z.string().min(1),
+    }),
+    gender: z.enum(['MALE', 'FEMALE']).optional(),
+    contact: z.object({
+      emailAddress: z.string().email(),
+      phones: z.array(z.object({
+        deviceType: z.string(),
+        countryCallingCode: z.string(),
+        number: z.string(),
+      })).optional(),
+    }).optional(),
+  })).min(1),
+  contact: z.object({
+    emailAddress: z.string().email(),
+    phone: z.string().optional(),
+  }),
+  specialRequests: z.string().max(500).optional(),
+  paymentMethod: z.string().optional(),
+  useLoyaltyPoints: z.boolean().default(false),
+})
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+
   try {
+    // Authenticate user
     const session = await getServerSession(authOptions)
-    
-    if (!session?.user) {
+
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Authentication required', code: 'UNAUTHORIZED' },
         { status: 401 }
       )
     }
 
-    const userId = (session.user as any).id
-    const body = await request.json()
+    const userId = session.user.id
 
-    const {
-      type,
-      flightOffer,
-      hotelOffer,
-      travelers,
-      contact,
-      specialRequests,
-      paymentMethod,
-      useLoyaltyPoints,
-    } = body
+    // Parse and validate request
+    const body = await request.json()
+    const validatedData = bookingRequestSchema.parse(body)
+
+    const { type, flightOffer, hotelOffer, travelers, contact, specialRequests, paymentMethod, useLoyaltyPoints } = validatedData
+
+    // Validate offer data based on type
+    if (type === 'FLIGHT' && !flightOffer) {
+      return NextResponse.json(
+        { error: 'Flight offer data required', code: 'MISSING_FLIGHT_OFFER' },
+        { status: 400 }
+      )
+    }
+
+    if (type === 'HOTEL' && !hotelOffer) {
+      return NextResponse.json(
+        { error: 'Hotel offer data required', code: 'MISSING_HOTEL_OFFER' },
+        { status: 400 }
+      )
+    }
 
     // Generate booking reference
     const bookingReference = generateBookingReference()
 
-    // Calculate total amount based on booking type
+    // Calculate pricing
     let totalAmount = 0
     let currency = 'USD'
-    
+
     if (type === 'FLIGHT' && flightOffer) {
-      totalAmount = parseFloat(flightOffer.price.grandTotal)
-      currency = flightOffer.price.currency
+      const offer = flightOffer as Record<string, unknown>
+      const price = offer.price as Record<string, unknown>
+      totalAmount = parseFloat(price.grandTotal as string) || 0
+      currency = (price.currency as string) || 'USD'
     } else if (type === 'HOTEL' && hotelOffer) {
-      totalAmount = parseFloat(hotelOffer.price.total)
-      currency = hotelOffer.price.currency
+      const offer = hotelOffer as Record<string, unknown>
+      const price = offer.price as Record<string, unknown>
+      totalAmount = parseFloat(price.total as string) || 0
+      currency = (price.currency as string) || 'USD'
+    }
+
+    if (totalAmount <= 0) {
+      return NextResponse.json(
+        { error: 'Invalid price data', code: 'INVALID_PRICE' },
+        { status: 400 }
+      )
     }
 
     // Apply loyalty points if requested
@@ -53,10 +115,72 @@ export async function POST(request: NextRequest) {
         where: { id: userId },
         select: { loyaltyPoints: true },
       })
-      
-      const maxPointsToUse = Math.min(user?.loyaltyPoints || 0, Math.floor(totalAmount * 10))
-      loyaltyPointsUsed = maxPointsToUse
-      totalAmount -= loyaltyPointsUsed / 10 // 10 points = $1
+
+      // 10 points = $1
+      const maxPointsValue = Math.floor(totalAmount * 10)
+      const availablePoints = user?.loyaltyPoints || 0
+      loyaltyPointsUsed = Math.min(availablePoints, maxPointsValue)
+      totalAmount -= loyaltyPointsUsed / 10
+    }
+
+    // Calculate loyalty points to earn (1 point per dollar)
+    const loyaltyPointsEarned = Math.floor(totalAmount)
+
+    // Extract travel dates
+    let travelDate: Date
+    let returnDate: Date | null = null
+
+    if (type === 'FLIGHT' && flightOffer) {
+      const offer = flightOffer as Record<string, unknown>
+      const itineraries = offer.itineraries as Array<Record<string, unknown>> | undefined
+
+      // Validate itineraries structure
+      if (!itineraries || !Array.isArray(itineraries) || itineraries.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid flight offer: missing itineraries', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
+
+      const segments = itineraries[0]?.segments as Array<Record<string, unknown>> | undefined
+      if (!segments || !Array.isArray(segments) || segments.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid flight offer: missing segments', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
+
+      const departure = segments[0]?.departure as Record<string, unknown> | undefined
+      if (!departure?.at) {
+        return NextResponse.json(
+          { error: 'Invalid flight offer: missing departure time', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
+
+      travelDate = new Date(departure.at as string)
+
+      if (itineraries.length > 1) {
+        const returnSegments = itineraries[1]?.segments as Array<Record<string, unknown>> | undefined
+        if (returnSegments && Array.isArray(returnSegments) && returnSegments.length > 0) {
+          const returnDeparture = returnSegments[0]?.departure as Record<string, unknown> | undefined
+          if (returnDeparture?.at) {
+            returnDate = new Date(returnDeparture.at as string)
+          }
+        }
+      }
+    } else if (type === 'HOTEL' && hotelOffer) {
+      const offer = hotelOffer as Record<string, unknown>
+      if (!offer.checkInDate || !offer.checkOutDate) {
+        return NextResponse.json(
+          { error: 'Invalid hotel offer: missing check-in/check-out dates', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
+      travelDate = new Date(offer.checkInDate as string)
+      returnDate = new Date(offer.checkOutDate as string)
+    } else {
+      travelDate = new Date()
     }
 
     // Create booking in database
@@ -69,78 +193,21 @@ export async function POST(request: NextRequest) {
         totalAmount,
         currency,
         loyaltyPointsUsed,
-        loyaltyPointsEarned: Math.floor(totalAmount),
+        loyaltyPointsEarned,
         paymentStatus: 'PENDING',
         paymentMethod,
-        travelDate: new Date(flightOffer?.itineraries[0]?.segments[0]?.departure?.at || hotelOffer?.checkInDate),
-        returnDate: flightOffer?.itineraries[1]?.segments[0]?.departure?.at 
-          ? new Date(flightOffer.itineraries[1].segments[0].departure.at)
-          : hotelOffer?.checkOutDate 
-          ? new Date(hotelOffer.checkOutDate)
-          : undefined,
-        adults: travelers?.length || 1,
+        travelDate,
+        returnDate,
+        adults: travelers.length,
         specialRequests,
       },
     })
 
-    // Create specific booking details based on type
+    // Create type-specific booking details
     if (type === 'FLIGHT' && flightOffer) {
-      // Create flight booking with Amadeus
-      const amadeusBooking = await amadeusService.createFlightBooking(flightOffer, travelers)
-      
-      // Store flight details
-      for (const itinerary of flightOffer.itineraries) {
-        for (const segment of itinerary.segments) {
-          await prisma.flightBooking.create({
-            data: {
-              bookingId: booking.id,
-              flightNumber: `${segment.carrierCode}${segment.number}`,
-              airline: segment.carrierCode,
-              aircraftType: segment.aircraft?.code,
-              departureAirport: segment.departure.iataCode,
-              departureCity: segment.departure.iataCode, // Would need city lookup
-              departureCountry: 'TBD',
-              arrivalAirport: segment.arrival.iataCode,
-              arrivalCity: segment.arrival.iataCode, // Would need city lookup
-              arrivalCountry: 'TBD',
-              departureTime: new Date(segment.departure.at),
-              arrivalTime: new Date(segment.arrival.at),
-              duration: parseDuration(segment.duration),
-              bookingClass: flightOffer.travelerPricings[0].fareDetailsBySegment[0].cabin,
-              seatNumbers: [],
-              basePrice: parseFloat(flightOffer.price.base),
-              taxes: parseFloat(flightOffer.price.fees?.[0]?.amount || '0'),
-              total: parseFloat(flightOffer.price.grandTotal),
-              status: 'CONFIRMED',
-              pnr: amadeusBooking.id,
-            },
-          })
-        }
-      }
+      await createFlightBookingDetails(booking.id, flightOffer as Record<string, unknown>, travelers)
     } else if (type === 'HOTEL' && hotelOffer) {
-      await prisma.hotelBooking.create({
-        data: {
-          bookingId: booking.id,
-          hotelId: hotelOffer.hotel.hotelId,
-          hotelName: hotelOffer.hotel.name,
-          hotelAddress: hotelOffer.hotel.address?.lines?.join(', ') || '',
-          hotelCity: hotelOffer.hotel.cityCode,
-          hotelCountry: hotelOffer.hotel.address?.countryCode || '',
-          starRating: hotelOffer.hotel.rating,
-          roomType: hotelOffer.room?.typeEstimated?.category || 'Standard',
-          roomCount: 1,
-          checkInDate: new Date(hotelOffer.checkInDate),
-          checkOutDate: new Date(hotelOffer.checkOutDate),
-          nights: calculateNights(hotelOffer.checkInDate, hotelOffer.checkOutDate),
-          guestName: `${travelers[0].name.firstName} ${travelers[0].name.lastName}`,
-          specialRequests,
-          roomRate: parseFloat(hotelOffer.price.base || hotelOffer.price.total),
-          taxes: parseFloat(hotelOffer.price.taxes?.[0]?.amount || '0'),
-          total: parseFloat(hotelOffer.price.total),
-          status: 'CONFIRMED',
-          confirmationNumber: generateConfirmationNumber(),
-        },
-      })
+      await createHotelBookingDetails(booking.id, hotelOffer as Record<string, unknown>, travelers)
     }
 
     // Create payment intent with Stripe
@@ -156,14 +223,19 @@ export async function POST(request: NextRequest) {
     })
 
     // Send real-time notification
-    await pusherService.sendNotification({
-      userId,
-      type: 'booking',
-      title: 'Booking Created',
-      message: `Your booking ${bookingReference} has been created and is awaiting payment.`,
-      data: { bookingId: booking.id },
-      actionUrl: `/booking/payment/${booking.id}`,
-    })
+    try {
+      await pusherService.sendNotification({
+        userId,
+        type: 'booking',
+        title: 'Booking Created',
+        message: `Your booking ${bookingReference} has been created and is awaiting payment.`,
+        data: { bookingId: booking.id },
+        actionUrl: `/booking/${booking.id}`,
+      })
+    } catch (notifyError) {
+      console.error('[BOOKING] Notification error:', notifyError)
+      // Non-critical, continue
+    }
 
     // Deduct loyalty points if used
     if (loyaltyPointsUsed > 0) {
@@ -177,6 +249,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const responseTime = Date.now() - startTime
+    console.log(`[BOOKING] Created ${bookingReference} for user ${userId} in ${responseTime}ms`)
+
     return NextResponse.json({
       success: true,
       data: {
@@ -184,22 +259,44 @@ export async function POST(request: NextRequest) {
         bookingReference,
         totalAmount,
         currency,
+        loyaltyPointsUsed,
+        loyaltyPointsEarned,
         paymentClientSecret: paymentIntent.clientSecret,
         paymentIntentId: paymentIntent.paymentIntentId,
       },
-    })
+    }, { status: 201 })
+
   } catch (error) {
-    console.error('Booking creation error:', error)
+    console.error('[BOOKING] Creation error:', error)
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: 'Invalid booking data',
+          code: 'VALIDATION_ERROR',
+          details: error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json(
-      { error: 'Failed to create booking' },
+      {
+        error: 'Failed to create booking. Please try again.',
+        code: 'BOOKING_ERROR',
+      },
       { status: 500 }
     )
   }
 }
 
 // Helper functions
+
 function generateBookingReference(): string {
-  const prefix = 'TB'
+  const prefix = 'TD'
   const timestamp = Date.now().toString(36).toUpperCase()
   const random = Math.random().toString(36).substring(2, 6).toUpperCase()
   return `${prefix}${timestamp}${random}`
@@ -223,4 +320,92 @@ function calculateNights(checkIn: string, checkOut: string): number {
   const end = new Date(checkOut)
   const diffTime = Math.abs(end.getTime() - start.getTime())
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+}
+
+async function createFlightBookingDetails(
+  bookingId: string,
+  flightOffer: Record<string, unknown>,
+  travelers: Array<Record<string, unknown>>
+) {
+  const itineraries = flightOffer.itineraries as Array<Record<string, unknown>>
+  const price = flightOffer.price as Record<string, unknown>
+  const travelerPricings = flightOffer.travelerPricings as Array<Record<string, unknown>>
+
+  for (const itinerary of itineraries) {
+    const segments = itinerary.segments as Array<Record<string, unknown>>
+
+    for (const segment of segments) {
+      const departure = segment.departure as Record<string, unknown>
+      const arrival = segment.arrival as Record<string, unknown>
+      const aircraft = segment.aircraft as Record<string, unknown> | undefined
+      const fareDetails = travelerPricings?.[0]?.fareDetailsBySegment?.[0] as Record<string, unknown> | undefined
+
+      await prisma.flightBooking.create({
+        data: {
+          bookingId,
+          flightNumber: `${segment.carrierCode}${segment.number}`,
+          airline: segment.carrierCode as string,
+          aircraftType: aircraft?.code as string | undefined,
+          departureAirport: departure.iataCode as string,
+          departureCity: departure.iataCode as string, // Would use lookup service in production
+          departureCountry: 'US', // Would use lookup service in production
+          arrivalAirport: arrival.iataCode as string,
+          arrivalCity: arrival.iataCode as string,
+          arrivalCountry: 'US',
+          departureTime: new Date(departure.at as string),
+          arrivalTime: new Date(arrival.at as string),
+          duration: parseDuration(segment.duration as string),
+          bookingClass: (fareDetails?.cabin as string) || 'ECONOMY',
+          cabinClass: (fareDetails?.class as string) || 'Y',
+          seatNumbers: [],
+          basePrice: parseFloat(price.base as string) || 0,
+          taxes: parseFloat((price.fees as Array<Record<string, unknown>>)?.[0]?.amount as string || '0'),
+          total: parseFloat(price.grandTotal as string) || 0,
+          status: 'PENDING',
+        },
+      })
+    }
+  }
+}
+
+async function createHotelBookingDetails(
+  bookingId: string,
+  hotelOffer: Record<string, unknown>,
+  travelers: Array<Record<string, unknown>>
+) {
+  const hotel = hotelOffer.hotel as Record<string, unknown>
+  const price = hotelOffer.price as Record<string, unknown>
+  const room = hotelOffer.room as Record<string, unknown> | undefined
+  const address = hotel.address as Record<string, unknown> | undefined
+  const checkInDate = hotelOffer.checkInDate as string
+  const checkOutDate = hotelOffer.checkOutDate as string
+
+  const mainTraveler = travelers[0] as Record<string, unknown>
+  const travelerName = mainTraveler?.name as Record<string, unknown>
+
+  await prisma.hotelBooking.create({
+    data: {
+      bookingId,
+      hotelId: hotel.hotelId as string,
+      hotelName: hotel.name as string,
+      hotelAddress: (address?.lines as string[])?.join(', ') || '',
+      hotelCity: hotel.cityCode as string,
+      hotelCountry: (address?.countryCode as string) || '',
+      starRating: parseInt(hotel.rating as string) || undefined,
+      latitude: hotel.latitude as number | undefined,
+      longitude: hotel.longitude as number | undefined,
+      roomType: (room?.typeEstimated as Record<string, unknown>)?.category as string || 'Standard',
+      roomCount: 1,
+      checkInDate: new Date(checkInDate),
+      checkOutDate: new Date(checkOutDate),
+      nights: calculateNights(checkInDate, checkOutDate),
+      guestName: `${travelerName?.firstName || ''} ${travelerName?.lastName || ''}`.trim() || 'Guest',
+      guestEmail: (mainTraveler?.contact as Record<string, unknown>)?.emailAddress as string | undefined,
+      roomRate: parseFloat(price.base as string || price.total as string) || 0,
+      taxes: parseFloat((price.taxes as Array<Record<string, unknown>>)?.[0]?.amount as string || '0'),
+      total: parseFloat(price.total as string) || 0,
+      status: 'PENDING',
+      confirmationNumber: generateConfirmationNumber(),
+    },
+  })
 }
