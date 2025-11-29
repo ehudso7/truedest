@@ -12,9 +12,21 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
+  // Guard against accidental production execution
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Refusing to run seed script in production. ' +
+      'If you really need to seed production, set SEED_ALLOW_PRODUCTION=true'
+    )
+  }
+
+  if (process.env.NODE_ENV === 'production' && !process.env.SEED_ALLOW_PRODUCTION) {
+    throw new Error('Seed script blocked in production environment')
+  }
+
   console.log('🌱 Starting database seed...\n')
 
-  // Clean up existing data (be careful in production!)
+  // Clean up existing data
   if (process.env.NODE_ENV !== 'production') {
     console.log('🧹 Cleaning existing data...')
     await prisma.ticketMessage.deleteMany()
@@ -397,18 +409,21 @@ async function main() {
         senderId: demoUser.id,
         senderType: 'USER',
         message: 'Hi, I would like to change my seat. Is seat 12A available?',
+        attachments: [],
       },
       {
         ticketId: ticket.id,
         senderId: supportUser.id,
         senderType: 'SUPPORT',
         message: 'Hello! Yes, seat 12A is available. I\'ve changed your seat assignment. You\'ll receive an updated confirmation email shortly.',
+        attachments: [],
       },
       {
         ticketId: ticket.id,
         senderId: demoUser.id,
         senderType: 'USER',
         message: 'Thank you so much!',
+        attachments: [],
       },
     ],
   })

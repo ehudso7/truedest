@@ -132,18 +132,51 @@ export async function POST(request: NextRequest) {
 
     if (type === 'FLIGHT' && flightOffer) {
       const offer = flightOffer as Record<string, unknown>
-      const itineraries = offer.itineraries as Array<Record<string, unknown>>
-      const segments = itineraries[0].segments as Array<Record<string, unknown>>
-      const departure = segments[0].departure as Record<string, unknown>
+      const itineraries = offer.itineraries as Array<Record<string, unknown>> | undefined
+
+      // Validate itineraries structure
+      if (!itineraries || !Array.isArray(itineraries) || itineraries.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid flight offer: missing itineraries', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
+
+      const segments = itineraries[0]?.segments as Array<Record<string, unknown>> | undefined
+      if (!segments || !Array.isArray(segments) || segments.length === 0) {
+        return NextResponse.json(
+          { error: 'Invalid flight offer: missing segments', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
+
+      const departure = segments[0]?.departure as Record<string, unknown> | undefined
+      if (!departure?.at) {
+        return NextResponse.json(
+          { error: 'Invalid flight offer: missing departure time', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
+
       travelDate = new Date(departure.at as string)
 
       if (itineraries.length > 1) {
-        const returnSegments = itineraries[1].segments as Array<Record<string, unknown>>
-        const returnDeparture = returnSegments[0].departure as Record<string, unknown>
-        returnDate = new Date(returnDeparture.at as string)
+        const returnSegments = itineraries[1]?.segments as Array<Record<string, unknown>> | undefined
+        if (returnSegments && Array.isArray(returnSegments) && returnSegments.length > 0) {
+          const returnDeparture = returnSegments[0]?.departure as Record<string, unknown> | undefined
+          if (returnDeparture?.at) {
+            returnDate = new Date(returnDeparture.at as string)
+          }
+        }
       }
     } else if (type === 'HOTEL' && hotelOffer) {
       const offer = hotelOffer as Record<string, unknown>
+      if (!offer.checkInDate || !offer.checkOutDate) {
+        return NextResponse.json(
+          { error: 'Invalid hotel offer: missing check-in/check-out dates', code: 'INVALID_OFFER' },
+          { status: 400 }
+        )
+      }
       travelDate = new Date(offer.checkInDate as string)
       returnDate = new Date(offer.checkOutDate as string)
     } else {

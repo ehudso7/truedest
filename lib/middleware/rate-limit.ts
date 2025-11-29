@@ -22,15 +22,26 @@ interface RateLimitStore {
 // In-memory store (use Redis in production)
 const rateLimitStore = new Map<string, RateLimitStore>()
 
-// Clean up expired entries periodically
-setInterval(() => {
+/**
+ * Clean up expired entries
+ */
+function cleanupExpiredEntries() {
   const now = Date.now()
   for (const [key, value] of rateLimitStore.entries()) {
     if (value.resetTime < now) {
       rateLimitStore.delete(key)
     }
   }
-}, 60000) // Clean up every minute
+}
+
+// Set up periodic cleanup only in long-running processes (not in tests)
+if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+  const cleanupInterval = setInterval(cleanupExpiredEntries, 60000)
+  // Don't keep process alive just for this timer
+  if (cleanupInterval.unref) {
+    cleanupInterval.unref()
+  }
+}
 
 /**
  * Default rate limit configurations
@@ -62,8 +73,8 @@ export const rateLimitConfigs = {
 
   // Strict limit for booking creation
   booking: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 5,
+    windowMs: 60 * 60 * 1000, // 1 hour
+    maxRequests: 10,
     message: 'Too many booking attempts. Please wait a moment.',
     keyPrefix: 'booking',
   },
@@ -75,6 +86,67 @@ export const rateLimitConfigs = {
     message: 'Too many password reset requests. Please try again later.',
     keyPrefix: 'pwd-reset',
   },
+
+  // Webhook processing
+  webhook: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 100,
+    message: 'Too many webhook requests.',
+    keyPrefix: 'webhook',
+  },
+}
+
+/**
+ * RateLimiter class for testable rate limiting
+ */
+export class RateLimiter {
+  private store = new Map<string, RateLimitStore>()
+  private config: { windowMs: number; maxRequests: number }
+
+  constructor(config: { windowMs: number; maxRequests: number }) {
+    this.config = config
+  }
+
+  check(key: string): { allowed: boolean; remaining: number; retryAfter: number } {
+    const now = Date.now()
+    let record = this.store.get(key)
+
+    // Initialize or reset if window expired
+    if (!record || record.resetTime < now) {
+      record = {
+        count: 0,
+        resetTime: now + this.config.windowMs,
+      }
+    }
+
+    // Increment count
+    record.count++
+    this.store.set(key, record)
+
+    const remaining = Math.max(0, this.config.maxRequests - record.count)
+    const retryAfter = Math.ceil((record.resetTime - now) / 1000)
+    const allowed = record.count <= this.config.maxRequests
+
+    return { allowed, remaining, retryAfter }
+  }
+
+  reset(key: string): void {
+    this.store.delete(key)
+  }
+}
+
+/**
+ * Get rate limiter key from request
+ */
+export function getRateLimiterKey(request: Request, prefix: string, userId?: string): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  const realIp = request.headers.get('x-real-ip')
+  const ip = realIp || forwarded?.split(',')[0]?.trim() || 'anonymous'
+
+  if (userId) {
+    return `${prefix}:${userId}:${ip}`
+  }
+  return `${prefix}:${ip}`
 }
 
 /**

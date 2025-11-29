@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       data: { updatedAt: new Date() },
     })
 
-    console.log(`[AUTH] User logged in: ${user.email}`)
+    console.log(`[AUTH] User logged in: ${user.id}`)
 
     // Return user data (without password)
     // Note: Actual session is created by NextAuth's signIn() on client

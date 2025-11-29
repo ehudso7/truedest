@@ -70,6 +70,20 @@ export class EmailService {
   }
 
   /**
+   * Escape HTML entities to prevent XSS in email templates
+   */
+  private escapeHtml(text: string): string {
+    const htmlEntities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    }
+    return text.replace(/[&<>"']/g, (char) => htmlEntities[char])
+  }
+
+  /**
    * Send a generic email
    */
   async send(options: EmailOptions): Promise<boolean> {
@@ -104,6 +118,7 @@ export class EmailService {
    * Send welcome email to new users
    */
   async sendWelcomeEmail(email: string, name: string): Promise<boolean> {
+    const safeName = this.escapeHtml(name)
     const html = `
       <!DOCTYPE html>
       <html>
@@ -124,7 +139,7 @@ export class EmailService {
             <h1>Welcome to TrueDest! ✈️</h1>
           </div>
           <div class="content">
-            <p>Hi ${name},</p>
+            <p>Hi ${safeName},</p>
             <p>Thank you for joining TrueDest – your AI-powered travel companion! We're excited to help you discover amazing destinations and plan unforgettable trips.</p>
 
             <div class="points">
@@ -169,6 +184,16 @@ export class EmailService {
    * Send booking confirmation email
    */
   async sendBookingConfirmation(data: BookingEmailData): Promise<boolean> {
+    // Escape user-provided data
+    const safeUserName = this.escapeHtml(data.userName)
+    const safeBookingRef = this.escapeHtml(data.bookingReference)
+    const safeAirline = data.details.airline ? this.escapeHtml(data.details.airline) : ''
+    const safeFlightNumber = data.details.flightNumber ? this.escapeHtml(data.details.flightNumber) : ''
+    const safeDepartureCity = data.details.departureCity ? this.escapeHtml(data.details.departureCity) : ''
+    const safeArrivalCity = data.details.arrivalCity ? this.escapeHtml(data.details.arrivalCity) : ''
+    const safeHotelName = data.details.hotelName ? this.escapeHtml(data.details.hotelName) : ''
+    const safeRoomType = data.details.roomType ? this.escapeHtml(data.details.roomType) : 'Standard Room'
+
     const formatDate = (date: Date) => date.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -191,13 +216,13 @@ export class EmailService {
             <tr>
               <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
                 <strong>Flight</strong><br>
-                ${data.details.airline} ${data.details.flightNumber}
+                ${safeAirline} ${safeFlightNumber}
               </td>
             </tr>
             <tr>
               <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
                 <strong>Route</strong><br>
-                ${data.details.departureCity} → ${data.details.arrivalCity}
+                ${safeDepartureCity} → ${safeArrivalCity}
               </td>
             </tr>
             <tr>
@@ -225,13 +250,13 @@ export class EmailService {
             <tr>
               <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
                 <strong>Hotel</strong><br>
-                ${data.details.hotelName}
+                ${safeHotelName}
               </td>
             </tr>
             <tr>
               <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
                 <strong>Room</strong><br>
-                ${data.details.roomType || 'Standard Room'}
+                ${safeRoomType}
               </td>
             </tr>
             <tr>
@@ -273,12 +298,12 @@ export class EmailService {
             <h1>Booking Confirmed! ✓</h1>
           </div>
           <div class="content">
-            <p>Hi ${data.userName},</p>
+            <p>Hi ${safeUserName},</p>
             <p>Great news! Your ${data.bookingType.toLowerCase()} booking has been confirmed.</p>
 
             <div class="booking-ref">
               <p style="margin: 0; color: #6b7280;">Booking Reference</p>
-              <h2 style="margin: 10px 0; color: #059669; font-size: 28px;">${data.bookingReference}</h2>
+              <h2 style="margin: 10px 0; color: #059669; font-size: 28px;">${safeBookingRef}</h2>
             </div>
 
             ${detailsHtml}
@@ -323,9 +348,13 @@ export class EmailService {
    * Send price drop alert email
    */
   async sendPriceAlertEmail(data: PriceAlertEmailData): Promise<boolean> {
+    const safeUserName = this.escapeHtml(data.userName)
+    const safeOrigin = data.origin ? this.escapeHtml(data.origin) : ''
+    const safeDestination = data.destination ? this.escapeHtml(data.destination) : ''
+
     const route = data.alertType === 'FLIGHT'
-      ? `${data.origin} → ${data.destination}`
-      : data.destination || 'your saved search'
+      ? `${safeOrigin} → ${safeDestination}`
+      : safeDestination || 'your saved search'
 
     const html = `
       <!DOCTYPE html>
@@ -350,7 +379,7 @@ export class EmailService {
             <h1>🔔 Price Drop Alert!</h1>
           </div>
           <div class="content">
-            <p>Hi ${data.userName},</p>
+            <p>Hi ${safeUserName},</p>
             <p>Great news! The price for <strong>${route}</strong> just dropped!</p>
 
             <div class="price-box">
@@ -392,6 +421,7 @@ export class EmailService {
    * Send password reset email
    */
   async sendPasswordResetEmail(email: string, name: string, resetUrl: string): Promise<boolean> {
+    const safeName = this.escapeHtml(name)
     const html = `
       <!DOCTYPE html>
       <html>
@@ -412,7 +442,7 @@ export class EmailService {
             <h1>Password Reset Request</h1>
           </div>
           <div class="content">
-            <p>Hi ${name},</p>
+            <p>Hi ${safeName},</p>
             <p>We received a request to reset your TrueDest account password. Click the button below to create a new password:</p>
 
             <center>
@@ -449,8 +479,8 @@ export class EmailService {
    */
   private htmlToText(html: string): string {
     return html
-      .replace(/<style[^>]*>.*<\/style>/gi, '')
-      .replace(/<script[^>]*>.*<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
       .replace(/<[^>]+>/g, '')
       .replace(/\s+/g, ' ')
       .trim()

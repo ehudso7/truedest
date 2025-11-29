@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { registerSchema } from '@/lib/validations'
 import { ZodError } from 'zod'
 
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log(`[AUTH] New user registered: ${user.email}`)
+    console.log(`[AUTH] New user registered: ${user.id}`)
 
     return NextResponse.json({
       success: true,
@@ -97,8 +98,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Handle Prisma unique constraint errors
-    if (error instanceof Error && error.message.includes('Unique constraint')) {
+    // Handle Prisma unique constraint errors using error codes
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
       return NextResponse.json(
         {
           error: 'Email already registered',
