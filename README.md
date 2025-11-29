@@ -1,214 +1,310 @@
 # TrueDest - AI-Powered Travel Booking Platform
 
-![TrueDest Logo](https://truedest.com/logo.png)
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/github/workflow/status/ehudso7/truedest/CI)](https://github.com/ehudso7/truedest/actions)
-[![Version](https://img.shields.io/github/v/release/ehudso7/truedest)](https://github.com/ehudso7/truedest/releases)
+[![CI/CD](https://github.com/ehudso7/truedest/actions/workflows/ci.yml/badge.svg)](https://github.com/ehudso7/truedest/actions)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
 
 ## Overview
 
-TrueDest is a next-generation travel booking platform that leverages AI to provide personalized travel recommendations and seamless booking experiences. Built with modern web technologies and integrated with leading GDS systems, TrueDest offers comprehensive travel solutions for flights, hotels, car rentals, and vacation packages.
+TrueDest is a production-ready, AI-powered travel booking platform that delivers personalized travel recommendations and seamless booking experiences. Built with modern web technologies and integrated with leading GDS systems, TrueDest offers comprehensive travel solutions for flights, hotels, car rentals, and vacation packages.
 
-## Features
+## Key Features
 
-- **AI-Powered Recommendations**: Personalized travel suggestions based on user preferences
-- **Real-Time Search**: Live availability and pricing from multiple providers
+### Core Functionality
+- **AI-Powered Recommendations**: OpenAI-powered personalized travel suggestions
+- **Real-Time Search**: Live availability and pricing from Amadeus GDS
 - **Secure Payments**: PCI-compliant payment processing with Stripe
-- **Multi-Language Support**: Available in 15+ languages
-- **Mobile Responsive**: Fully optimized for mobile devices
-- **Price Alerts**: Get notified when prices drop for your desired trips
-- **24/7 Support**: Live chat and dedicated customer support
+- **Price Alerts**: Automated notifications when prices drop
+- **Loyalty Program**: Points-based rewards with tiered benefits
+
+### Technical Highlights
+- **Type-Safe**: Full TypeScript with strict mode
+- **Validated**: Zod schemas for API request/response validation
+- **Rate Limited**: Protection against abuse with configurable limits
+- **GDPR/CCPA Compliant**: Built-in privacy controls and data export
+- **Real-Time**: Pusher integration for live updates
+- **Observable**: Sentry error tracking and PostHog analytics
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, React 18, TypeScript, Tailwind CSS
-- **Backend**: Node.js, Prisma ORM, PostgreSQL
-- **Authentication**: NextAuth.js with JWT
-- **Payments**: Stripe API
-- **GDS Integration**: Amadeus API
-- **Real-time**: Pusher, Socket.io
-- **Cloud**: AWS S3, Vercel
-- **Monitoring**: Sentry, PostHog
+| Category | Technology |
+|----------|------------|
+| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS |
+| **Backend** | Node.js, Next.js API Routes |
+| **Database** | PostgreSQL, Prisma ORM |
+| **Authentication** | NextAuth.js v5 (JWT strategy) |
+| **Payments** | Stripe API with webhooks |
+| **GDS** | Amadeus API |
+| **Real-time** | Pusher |
+| **Email** | SendGrid |
+| **Monitoring** | Sentry, PostHog |
+| **Cloud** | Vercel, AWS S3 |
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ 
-- PostgreSQL 14+
-- Redis (optional)
-- npm or yarn
+- Node.js 20+ (LTS recommended)
+- pnpm 8+ (recommended) or npm
+- PostgreSQL 15+
+- Redis (optional, for caching)
 
-### Installation
+### Quick Start
 
-1. Clone the repository:
 ```bash
+# Clone the repository
 git clone https://github.com/ehudso7/truedest.git
 cd truedest
-```
 
-2. Install dependencies:
-```bash
-npm install
-```
+# Install dependencies
+pnpm install
 
-3. Set up environment variables:
-```bash
+# Set up environment variables
 cp .env.example .env.local
-```
+# Edit .env.local with your configuration
 
-4. Configure your environment variables in `.env.local`
+# Generate Prisma client
+pnpm db:generate
 
-5. Set up the database:
-```bash
-npm run db:push
-npm run db:seed
-```
+# Push database schema (development)
+pnpm db:push
 
-6. Start the development server:
-```bash
-npm run dev
+# Seed demo data (optional)
+pnpm db:seed
+
+# Start development server
+pnpm dev
 ```
 
 Visit `http://localhost:3000` to see the application.
 
-## Environment Setup
+### Environment Variables
 
-See [SETUP_GUIDE.md](SETUP_GUIDE.md) for detailed instructions on configuring all services.
+See [.env.example](.env.example) for all required and optional environment variables.
 
-### Required Services
+#### Required
+```env
+DATABASE_URL=postgresql://...
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-secret-key
+STRIPE_SECRET_KEY=sk_...
+STRIPE_PUBLISHABLE_KEY=pk_...
+AMADEUS_CLIENT_ID=...
+AMADEUS_CLIENT_SECRET=...
+```
 
-- **Supabase**: Database and authentication
-- **Stripe**: Payment processing
-- **Amadeus**: Flight and hotel data
-- **SendGrid**: Email notifications
-
-### Optional Services
-
-- **Google Maps**: Location services
-- **Pusher**: Real-time updates
-- **Sentry**: Error tracking
-- **PostHog**: Analytics
+#### Optional
+```env
+OPENAI_API_KEY=sk-...
+SENDGRID_API_KEY=SG...
+SENTRY_DSN=https://...
+POSTHOG_KEY=phc_...
+PUSHER_APP_ID=...
+```
 
 ## Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
-- `npm run test` - Run tests
-- `npm run typecheck` - Type checking
-- `npm run db:push` - Push database schema
-- `npm run db:studio` - Open Prisma Studio
+| Script | Description |
+|--------|-------------|
+| `pnpm dev` | Start development server |
+| `pnpm build` | Build for production |
+| `pnpm start` | Start production server |
+| `pnpm lint` | Run ESLint |
+| `pnpm lint:fix` | Fix ESLint issues |
+| `pnpm format` | Format with Prettier |
+| `pnpm test` | Run unit tests |
+| `pnpm test:coverage` | Run tests with coverage |
+| `pnpm test:e2e` | Run E2E tests |
+| `pnpm typecheck` | TypeScript type checking |
+| `pnpm db:generate` | Generate Prisma client |
+| `pnpm db:push` | Push schema to database |
+| `pnpm db:migrate` | Run database migrations |
+| `pnpm db:studio` | Open Prisma Studio |
+| `pnpm db:seed` | Seed demo data |
 
 ## Project Structure
 
 ```
 truedest/
-├── app/                # Next.js app directory
-│   ├── api/           # API routes
-│   ├── (auth)/        # Authentication pages
-│   └── ...            # Other pages
-├── components/        # React components
-├── lib/              # Utility functions
-│   ├── services/     # Service integrations
-│   └── db.ts         # Database client
-├── prisma/           # Database schema
-├── public/           # Static assets
-└── scripts/          # Setup scripts
+├── app/                    # Next.js App Router
+│   ├── api/               # API routes
+│   │   ├── auth/          # Authentication endpoints
+│   │   ├── bookings/      # Booking management
+│   │   ├── flights/       # Flight search
+│   │   ├── hotels/        # Hotel search
+│   │   ├── price-alerts/  # Price alert CRUD
+│   │   ├── recommendations/ # AI recommendations
+│   │   ├── user/          # User profile & privacy
+│   │   └── webhooks/      # Stripe webhooks
+│   ├── (auth)/            # Auth pages (login, register)
+│   ├── dashboard/         # User dashboard
+│   └── ...                # Other pages
+├── components/            # React components
+│   ├── ui/               # Reusable UI components
+│   └── ...               # Feature components
+├── lib/                   # Core libraries
+│   ├── auth/             # NextAuth configuration
+│   ├── config.ts         # Environment validation
+│   ├── middleware/       # Rate limiting, etc.
+│   ├── prisma.ts         # Database client
+│   ├── services/         # External service clients
+│   │   ├── amadeus.ts    # Amadeus GDS
+│   │   ├── stripe.ts     # Stripe payments
+│   │   ├── email.ts      # SendGrid emails
+│   │   └── ai.ts         # OpenAI integration
+│   └── validations/      # Zod schemas
+├── prisma/               # Database
+│   ├── schema.prisma     # Data model
+│   └── seed.ts           # Seed script
+├── __tests__/            # Test files
+│   ├── unit/             # Unit tests
+│   ├── integration/      # API tests
+│   └── components/       # Component tests
+├── .github/workflows/    # CI/CD pipelines
+└── docs/                 # Documentation
 ```
 
 ## API Documentation
 
 ### Authentication
 
-All API endpoints require authentication via JWT token in the Authorization header:
+All authenticated endpoints require a valid session cookie or JWT token:
 
+```http
+Cookie: next-auth.session-token=...
 ```
-Authorization: Bearer <token>
-```
 
-### Endpoints
+### Core Endpoints
 
-- `GET /api/flights` - Search flights
-- `GET /api/hotels` - Search hotels
-- `POST /api/bookings` - Create booking
-- `GET /api/user/profile` - Get user profile
-- `PUT /api/user/profile` - Update profile
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Create new account |
+| GET | `/api/flights/search` | Search flights |
+| GET | `/api/hotels/search` | Search hotels |
+| POST | `/api/bookings/create` | Create booking |
+| GET | `/api/price-alerts` | List price alerts |
+| POST | `/api/price-alerts` | Create price alert |
+| GET | `/api/recommendations` | Get AI recommendations |
+| GET | `/api/user/privacy` | Export user data (GDPR) |
+| DELETE | `/api/user/privacy` | Delete account (GDPR) |
 
-See [API_DOCS.md](docs/API_DOCS.md) for complete documentation.
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+See [docs/API_DOCS.md](docs/API_DOCS.md) for complete API documentation.
 
 ## Testing
 
 ```bash
-# Run all tests
-npm run test
+# Run all unit tests
+pnpm test
 
 # Run tests in watch mode
-npm run test:watch
+pnpm test:watch
 
-# Run tests with coverage
-npm run test:coverage
+# Run with coverage report
+pnpm test:coverage
+
+# Run E2E tests (requires built app)
+pnpm build && pnpm test:e2e
 ```
+
+### Test Coverage Requirements
+
+| Metric | Threshold |
+|--------|-----------|
+| Branches | 50% |
+| Functions | 50% |
+| Lines | 50% |
+| Statements | 50% |
+
+## CI/CD Pipeline
+
+The GitHub Actions workflow runs on every push and PR:
+
+1. **Lint** - ESLint and Prettier checks
+2. **Type Check** - TypeScript compilation
+3. **Test** - Jest unit and integration tests
+4. **Build** - Next.js production build
+5. **Security** - Dependency audit
+6. **Database** - Schema validation
+7. **E2E** - Playwright tests (main branch only)
+8. **Deploy** - Vercel deployment
+
+PRs are blocked if lint, typecheck, test, or build fail.
 
 ## Deployment
 
 ### Vercel (Recommended)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/ehudso7/truedest)
+1. Connect your GitHub repository to Vercel
+2. Configure environment variables in Vercel dashboard
+3. Deploy
 
-1. Click the deploy button above
-2. Connect your GitHub account
-3. Configure environment variables
-4. Deploy
-
-### Manual Deployment
+### Docker
 
 ```bash
-# Build the application
-npm run build
+# Build image
+docker build -t truedest .
 
-# Start production server
-npm run start
+# Run container
+docker run -p 3000:3000 --env-file .env.local truedest
+```
+
+### Manual
+
+```bash
+# Build
+pnpm build
+
+# Start
+pnpm start
 ```
 
 ## Security
 
-- All data is encrypted in transit and at rest
-- PCI DSS compliant payment processing
-- Regular security audits and penetration testing
-- GDPR and CCPA compliant
+- All traffic encrypted with TLS 1.3
+- Passwords hashed with bcrypt (12 rounds)
+- PCI DSS compliant payment processing (via Stripe)
+- Rate limiting on all endpoints
+- Input validation with Zod
+- CSRF protection via NextAuth
+- Security headers configured
 
-Report security vulnerabilities to security@truedest.com
+### Reporting Vulnerabilities
+
+Report security issues to: security@truedest.com
+
+## Privacy & Compliance
+
+- GDPR compliant (EU)
+- CCPA compliant (California)
+- Data export functionality
+- Account deletion with anonymization
+- Cookie consent management
+
+See [docs/PRIVACY_FEATURES.md](docs/PRIVACY_FEATURES.md) for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`pnpm test && pnpm lint && pnpm typecheck`)
+5. Commit (`git commit -m 'Add amazing feature'`)
+6. Push (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- Documentation: [https://docs.truedest.com](https://docs.truedest.com)
+- Documentation: [docs.truedest.com](https://docs.truedest.com)
 - Email: support@truedest.com
-- Discord: [Join our community](https://discord.gg/truedest)
-- Twitter: [@truedest](https://twitter.com/truedest)
-
-## Acknowledgments
-
-- Thanks to all contributors
-- Built with amazing open source projects
-- Special thanks to the Amadeus team for GDS access
+- Issues: [GitHub Issues](https://github.com/ehudso7/truedest/issues)
 
 ---
 
-Made with ❤️ by the TrueDest Team
+Built with modern web technologies by the TrueDest Team
